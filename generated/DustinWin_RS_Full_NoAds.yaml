@@ -24,11 +24,11 @@ proxy-groups:
   - {name: 📉 省流节点, type: url-test, tolerance: 100, include-all: true, filter: "(0\\.[1-5]|低倍率|省流|大流量)"}
   - {name: ♻️ 自动选择, type: url-test, tolerance: 100, include-all: true}
   - {name: 👉 手动选择, type: select, include-all: true}
-  - {name: 🇭🇰 香港节点, type: fallback, include-all: true, filter: "(?i)(🇭🇰|港|hk|hongkong|hong kong)", url: "https://www.gstatic.com/generate_204", interval: 600}
-  - {name: 🇹🇼 台湾节点, type: fallback, include-all: true, filter: "(?i)(🇹🇼|台|tw|taiwan|tai wan)", url: "https://www.gstatic.com/generate_204", interval: 600}
-  - {name: 🇯🇵 日本节点, type: fallback, include-all: true, filter: "(?i)(🇯🇵|日|jp|japan)", url: "https://www.gstatic.com/generate_204", interval: 600}
-  - {name: 🇸🇬 新加坡节点, type: fallback, include-all: true, filter: "(?i)(🇸🇬|新|sg|singapore)", url: "https://www.gstatic.com/generate_204", interval: 600}
-  - {name: 🇺🇸 美国节点, type: fallback, include-all: true, filter: "(?i)(🇺🇸|美|us|unitedstates|united states)", url: "https://www.gstatic.com/generate_204", interval: 600}
+  - {name: 🇭🇰 香港节点, type: select, include-all: true, filter: "(?i)(🇭🇰|港|hk|hongkong|hong kong)"}
+  - {name: 🇹🇼 台湾节点, type: select, include-all: true, filter: "(?i)(🇹🇼|台|tw|taiwan|tai wan)"}
+  - {name: 🇯🇵 日本节点, type: select, include-all: true, filter: "(?i)(🇯🇵|日|jp|japan)"}
+  - {name: 🇸🇬 新加坡节点, type: select, include-all: true, filter: "(?i)(🇸🇬|新|sg|singapore)"}
+  - {name: 🇺🇸 美国节点, type: select, include-all: true, filter: "(?i)(🇺🇸|美|us|unitedstates|united states)"}
 
 rule-providers:
   private:

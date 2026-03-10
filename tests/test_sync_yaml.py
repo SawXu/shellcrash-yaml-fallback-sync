@@ -25,14 +25,14 @@ proxy-groups:
 
 
 class TransformContentTests(unittest.TestCase):
-    def test_rewrites_region_groups_to_fallback(self) -> None:
+    def test_rewrites_region_groups_to_select(self) -> None:
         result = transform_content(SOURCE)
 
         for name in TARGET_NAMES:
-            self.assertIn(f"name: {name}, type: fallback", result)
+            self.assertIn(f"name: {name}, type: select", result)
 
         self.assertNotIn("name: 🇭🇰 香港节点, type: url-test", result)
-        self.assertIn('url: "https://www.gstatic.com/generate_204", interval: 600', result)
+        self.assertNotIn("url: \"https://www.gstatic.com/generate_204\"", result)
         self.assertIn("name: ♻️ 自动选择, type: url-test", result)
         self.assertIn("name: 👑 高级节点, type: url-test", result)
 

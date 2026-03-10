@@ -15,8 +15,6 @@ RAW_URL_TEMPLATE = (
     "rules/clash_providers/DustinWin_RS_Full_NoAds.yaml"
 )
 OUTPUT_PATH = Path("generated/DustinWin_RS_Full_NoAds.yaml")
-FALLBACK_URL = "https://www.gstatic.com/generate_204"
-FALLBACK_INTERVAL = 600
 TARGET_NAMES = (
     "🇭🇰 香港节点",
     "🇹🇼 台湾节点",
@@ -90,12 +88,11 @@ def rewrite_line(line: str) -> str:
 
         prefix, filter_part = line.split(', filter: "', 1)
         filter_value, suffix = filter_part.split('"}', 1)
-        rewritten_prefix = prefix.replace("type: url-test, ", "type: fallback, ")
+        rewritten_prefix = prefix.replace("type: url-test, ", "type: select, ")
         rewritten_prefix = rewritten_prefix.replace("tolerance: 50, ", "")
         rewritten_prefix = rewritten_prefix.replace("tolerance: 100, ", "")
         return (
-            f'{rewritten_prefix}, filter: "{filter_value}", '
-            f'url: "{FALLBACK_URL}", interval: {FALLBACK_INTERVAL}'
+            f'{rewritten_prefix}, filter: "{filter_value}"'
             f"}}{suffix}"
         )
 
@@ -109,7 +106,7 @@ def transform_content(content: str) -> str:
     for line in content.splitlines():
         rewritten = rewrite_line(line)
         for name in TARGET_NAMES:
-            if f"name: {name}, type: fallback" in rewritten:
+            if f"name: {name}, type: select" in rewritten:
                 seen.add(name)
         lines.append(rewritten)
 
