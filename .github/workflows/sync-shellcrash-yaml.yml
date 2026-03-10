@@ -32,7 +32,7 @@ jobs:
 
       - name: Commit changes
         run: |
-          if git diff --quiet --exit-code; then
+          if git diff --quiet -- generated/DustinWin_RS_Full_NoAds.yaml; then
             echo "No changes to commit"
             exit 0
           fi

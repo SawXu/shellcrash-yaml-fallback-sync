@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 from pathlib import Path
-from urllib.request import urlopen
+import subprocess
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 
-UPSTREAM_URL = (
-    "https://raw.githubusercontent.com/juewuy/ShellCrash/"
-    "ed635b871a3b0441b0c62cfa2dd120dbde0e3aa6/rules/clash_providers/"
-    "DustinWin_RS_Full_NoAds.yaml"
+REPO_API_URL = "https://api.github.com/repos/juewuy/ShellCrash"
+RAW_URL_TEMPLATE = (
+    "https://raw.githubusercontent.com/juewuy/ShellCrash/{branch}/"
+    "rules/clash_providers/DustinWin_RS_Full_NoAds.yaml"
 )
 OUTPUT_PATH = Path("generated/DustinWin_RS_Full_NoAds.yaml")
 FALLBACK_URL = "https://www.gstatic.com/generate_204"
@@ -22,9 +26,60 @@ TARGET_NAMES = (
 )
 
 
-def download_upstream(url: str = UPSTREAM_URL) -> str:
-    with urlopen(url) as response:
+def fetch_text(url: str) -> str:
+    headers = {"Accept": "application/vnd.github+json"}
+    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    request = Request(url, headers=headers)
+    with urlopen(request) as response:
         return response.read().decode("utf-8")
+
+
+def parse_default_branch(payload: str) -> str:
+    default_branch = json.loads(payload).get("default_branch")
+    if not default_branch:
+        raise ValueError("default_branch is missing from repository metadata")
+    return default_branch
+
+
+def build_upstream_url(branch: str) -> str:
+    return RAW_URL_TEMPLATE.format(branch=branch)
+
+
+def parse_default_branch_from_ls_remote(output: str) -> str:
+    for line in output.splitlines():
+        if not line.endswith("\tHEAD"):
+            continue
+        if not line.startswith("ref: refs/heads/"):
+            continue
+        return line.removeprefix("ref: refs/heads/").removesuffix("\tHEAD")
+    raise ValueError("HEAD default branch is missing from ls-remote output")
+
+
+def resolve_default_branch() -> str:
+    try:
+        return parse_default_branch(fetch_text(REPO_API_URL))
+    except (HTTPError, URLError, ValueError):
+        result = subprocess.run(
+            [
+                "git",
+                "ls-remote",
+                "--symref",
+                "https://github.com/juewuy/ShellCrash",
+                "HEAD",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return parse_default_branch_from_ls_remote(result.stdout)
+
+
+def download_upstream() -> str:
+    branch = resolve_default_branch()
+    return fetch_text(build_upstream_url(branch))
 
 
 def rewrite_line(line: str) -> str:
