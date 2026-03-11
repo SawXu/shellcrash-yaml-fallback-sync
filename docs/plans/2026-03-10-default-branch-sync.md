@@ -4,7 +4,7 @@
 
 **Goal:** Make the sync script follow the current default branch of `juewuy/ShellCrash` and ensure the workflow commits only when `generated/DustinWin_RS_Full_NoAds.yaml` changes.
 
-**Architecture:** The Python script will query the GitHub repository API for `default_branch`, derive the raw YAML URL from that branch, then apply the existing fallback transformation. The workflow will continue generating the YAML but narrow commit detection to the generated file only.
+**Architecture:** The Python script will query the GitHub repository API for `default_branch`, derive the raw YAML URL from that branch, then apply the existing select transformation. The workflow will continue generating the YAML but narrow commit detection to the generated file only.
 
 **Tech Stack:** Python 3 standard library, unittest, GitHub Actions
 
@@ -111,7 +111,7 @@ Run:
 python3 -m unittest discover -s tests -v
 python3 scripts/sync_yaml.py
 python3 scripts/sync_yaml.py --check
-rg -n 'name: (🇭🇰 香港节点|🇹🇼 台湾节点|🇯🇵 日本节点|🇸🇬 新加坡节点|🇺🇸 美国节点), type: fallback' generated/DustinWin_RS_Full_NoAds.yaml
+rg -n 'name: (🇭🇰 香港节点|🇹🇼 台湾节点|🇯🇵 日本节点|🇸🇬 新加坡节点|🇺🇸 美国节点), type: select' generated/DustinWin_RS_Full_NoAds.yaml
 rg -n 'name: (♻️ 自动选择|👑 高级节点|📉 省流节点), type: url-test' generated/DustinWin_RS_Full_NoAds.yaml
 git diff -- .github/workflows/sync-shellcrash-yaml.yml README.md scripts/sync_yaml.py tests/test_sync_yaml.py generated/DustinWin_RS_Full_NoAds.yaml
 ```
