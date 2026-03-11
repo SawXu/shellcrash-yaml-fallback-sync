@@ -10,7 +10,7 @@
 
 - 每次执行时动态查询 `juewuy/ShellCrash` 的默认分支
 - 从该默认分支下载最新的 `rules/clash_providers/DustinWin_RS_Full_NoAds.yaml`
-- 继续只改 5 个地区组为 `fallback`
+- 继续只改 5 个地区组为 `select`
 - 仅当 `generated/DustinWin_RS_Full_NoAds.yaml` 与上一次提交相比有变化时才提交
 
 ## 方案
@@ -62,7 +62,7 @@ workflow 生成 YAML 后，使用：
 ## 验证
 
 - 单测验证默认分支 API 响应可正确拼接 raw URL
-- 单测验证地区组仍会被正确改成 `fallback`
+- 单测验证地区组仍会被正确改成 `select`
 - 本地运行脚本生成 YAML
 - 本地运行 `--check`
 - 检查 workflow 只对目标文件做 diff 判断

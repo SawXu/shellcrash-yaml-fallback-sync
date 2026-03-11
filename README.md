@@ -1,6 +1,8 @@
 # shellcrash-yaml-fallback-sync
 
-定时拉取 ShellCrash 默认分支上的最新 YAML，并将 5 个地区节点组改写为 `fallback` 后提交回仓库。
+定时拉取 ShellCrash 默认分支上的最新 YAML，并将 5 个地区节点组从 `url-test` 改写为 `select` 后提交回仓库。
+
+> 仓库名沿用了早期命名，但当前同步脚本并不会把节点组改成 `fallback`。
 
 ## 上游来源
 
@@ -11,6 +13,8 @@
 ## 生成结果
 
 - 输出文件：`generated/DustinWin_RS_Full_NoAds.yaml`
+- 改写范围：`🇭🇰 香港节点`、`🇹🇼 台湾节点`、`🇯🇵 日本节点`、`🇸🇬 新加坡节点`、`🇺🇸 美国节点`
+- 改写规则：将上述节点组的 `type: url-test` 改为 `type: select`，并移除对应的 `tolerance`
 
 ## 本地运行
 
