@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -15,12 +16,19 @@ RAW_URL_TEMPLATE = (
     "rules/clash_providers/DustinWin_RS_Full_NoAds.yaml"
 )
 OUTPUT_PATH = Path("generated/DustinWin_RS_Full_NoAds.yaml")
+OFFICIAL_MRS_BASE_URL = (
+    "https://github.com/DustinWin/ruleset_geodata/releases/download/"
+    "mihomo-ruleset"
+)
 TARGET_NAMES = (
     "🇭🇰 香港节点",
     "🇹🇼 台湾节点",
     "🇯🇵 日本节点",
     "🇸🇬 新加坡节点",
     "🇺🇸 美国节点",
+)
+MRS_URL_PATTERN = re.compile(
+    r'https://[^"]*/DustinWin/ruleset_geodata@[^"/]+/(?P<filename>[^"/]+\.mrs)'
 )
 
 
@@ -81,6 +89,8 @@ def download_upstream() -> str:
 
 
 def rewrite_line(line: str) -> str:
+    line = rewrite_mrs_url(line)
+
     for name in TARGET_NAMES:
         marker = f"name: {name}, type: url-test"
         if marker not in line:
@@ -97,6 +107,14 @@ def rewrite_line(line: str) -> str:
         )
 
     return line
+
+
+def rewrite_mrs_url(line: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        filename = match.group("filename")
+        return f"{OFFICIAL_MRS_BASE_URL}/{filename}"
+
+    return MRS_URL_PATTERN.sub(replace, line)
 
 
 def transform_content(content: str) -> str:

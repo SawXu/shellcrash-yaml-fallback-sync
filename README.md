@@ -9,6 +9,14 @@
 - 仓库：`juewuy/ShellCrash`
 - 文件：`rules/clash_providers/DustinWin_RS_Full_NoAds.yaml`
 - 分支：每次运行时动态查询仓库默认分支
+- 说明：本仓库先同步 ShellCrash 上游 YAML，再对生成结果做本地转换
+
+## mrs 规则源
+
+- 现有 `rule-providers` 中的 `.mrs` 文件下载地址统一改写为 DustinWin 官方源
+- 官方源：`https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/<name>.mrs`
+- 示例：`media.mrs` 对应 `https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/media.mrs`
+- 当前不会新增或删除规则集，仅替换 YAML 中已有 `.mrs` 的下载地址
 
 ## 生成结果
 
