@@ -39,7 +39,7 @@ python3 scripts/sync_yaml.py --check
 - 作用：从 Claude 的入口策略组开始，递归解析当前实际命中的地区组；只有当当前链路真实无法访问 `claude.ai` 时，才在命中的地区组内依次切换候选节点
 - 依赖：可访问 Mihomo Controller API，且系统可用 `curl`
 - 先修改脚本顶部配置：`API_BASE`、`SECRET`、`PROXY_URL`、`CLAUDE_URL`、`ENTRY_GROUPS`、`CURL_CONNECT_TIMEOUT`、`CURL_MAX_TIME`、`SWITCH_WAIT`
-- 默认会同时尝试 `🤖 AI 平台` 和 `🚀 节点选择` 两个入口策略组，并只维护其中当前真正命中的地区组
+- 默认只追踪 `🤖 AI 平台` 这条 Claude 入口策略链；只有你显式配置多个 Claude 专用入口时，才会维护多个入口
 - 连通性判断不再依赖 `gstatic` 或 Mihomo 的 `delay` 探测，而是通过本机代理直接请求 `claude.ai`
 
 ```bash
