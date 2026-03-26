@@ -36,9 +36,11 @@ python3 scripts/sync_yaml.py --check
 ## 故障切换脚本
 
 - 脚本：`scripts/mihomo-failover.sh`
-- 作用：定时检查 5 个地区 `select` 组当前节点是否可用；当前节点不可用时，测试组内其他节点并切换到延迟最低的可用节点
+- 作用：从 Claude 的入口策略组开始，递归解析当前实际命中的地区组；只有当当前链路真实无法访问 `claude.ai` 时，才在命中的地区组内依次切换候选节点
 - 依赖：可访问 Mihomo Controller API，且系统可用 `curl`
-- 先修改脚本顶部配置：`API_BASE`、`SECRET`、`TEST_URL`、`TIMEOUT`
+- 先修改脚本顶部配置：`API_BASE`、`SECRET`、`PROXY_URL`、`CLAUDE_URL`、`ENTRY_GROUPS`、`CURL_CONNECT_TIMEOUT`、`CURL_MAX_TIME`、`SWITCH_WAIT`
+- 默认会同时尝试 `🤖 AI 平台` 和 `🚀 节点选择` 两个入口策略组，并只维护其中当前真正命中的地区组
+- 连通性判断不再依赖 `gstatic` 或 Mihomo 的 `delay` 探测，而是通过本机代理直接请求 `claude.ai`
 
 ```bash
 sh scripts/mihomo-failover.sh
