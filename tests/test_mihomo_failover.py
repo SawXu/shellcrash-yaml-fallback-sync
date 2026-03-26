@@ -17,6 +17,74 @@ def run_shell(script: str) -> subprocess.CompletedProcess[str]:
 
 
 class MihomoFailoverTests(unittest.TestCase):
+    def test_check_url_connectivity_does_not_follow_redirects(self) -> None:
+        result = run_shell(
+            textwrap.dedent(
+                """
+                MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                curl() {
+                    case " $* " in
+                        *" -L "*) return 9 ;;
+                        *) printf '302' ;;
+                    esac
+                }
+
+                set +e
+                check_url_connectivity "https://claude.ai/"
+                status=$?
+                set -e
+                printf 'status:%s\\n' "$status"
+                """
+            )
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "status:0")
+
+    def test_maintains_google_entry_group_with_google_connectivity(self) -> None:
+        result = run_shell(
+            textwrap.dedent(
+                """
+                MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                log() { :; }
+                SWITCH_WAIT=0
+                CURRENT_NODE="香港A"
+                get_group() {
+                    case "$1" in
+                        "🚀 节点选择") printf '%s' '{"now":"🇭🇰 香港节点"}' ;;
+                        "🇭🇰 香港节点") printf '%s' "{\\\"now\\\":\\\"$CURRENT_NODE\\\",\\\"all\\\":[\\\"香港A\\\",\\\"香港B\\\",\\\"香港C\\\"]}" ;;
+                        *) printf '%s' '{}' ;;
+                    esac
+                }
+                check_url_connectivity() {
+                    [ "$1" = "https://www.google.com/" ] && [ "$CURRENT_NODE" = "香港C" ]
+                }
+                switch_node() {
+                    CURRENT_NODE="$2"
+                    printf 'switched:%s\\n' "$2"
+                }
+
+                set +e
+                maintain_entry_groups "Google" "🚀 节点选择" "https://www.google.com/"
+                status=$?
+                set -e
+                printf 'status:%s\\n' "$status"
+                printf 'current:%s\\n' "$CURRENT_NODE"
+                """
+            )
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.strip().splitlines(),
+            [
+                "switched:香港B",
+                "switched:香港C",
+                "status:0",
+                "current:香港C",
+            ],
+        )
+
     def test_resolve_active_region_groups_uses_claude_entry_group_by_default(self) -> None:
         result = run_shell(
             textwrap.dedent(
@@ -71,7 +139,7 @@ class MihomoFailoverTests(unittest.TestCase):
                 """
                 MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
                 log() { :; }
-                ENTRY_GROUPS="🤖 AI 平台
+                CLAUDE_ENTRY_GROUPS="🤖 AI 平台
                 🚀 节点选择"
                 get_group() {
                     case "$1" in
@@ -82,7 +150,7 @@ class MihomoFailoverTests(unittest.TestCase):
                     esac
                 }
 
-                resolve_active_region_groups
+                resolve_active_region_groups "$CLAUDE_ENTRY_GROUPS"
                 """
             )
         )
@@ -99,7 +167,7 @@ class MihomoFailoverTests(unittest.TestCase):
                 get_group() {
                     printf '%s' '{"now":"美国A","all":["美国A","美国B"]}'
                 }
-                check_claude_connectivity() {
+                check_url_connectivity() {
                     return 0
                 }
                 switch_node() {
@@ -126,7 +194,7 @@ class MihomoFailoverTests(unittest.TestCase):
                 get_group() {
                     printf '%s' "{\\\"now\\\":\\\"$CURRENT_NODE\\\",\\\"all\\\":[\\\"美国A\\\",\\\"美国B\\\",\\\"美国C\\\"]}"
                 }
-                check_claude_connectivity() {
+                check_url_connectivity() {
                     [ "$CURRENT_NODE" = "美国C" ]
                 }
                 switch_node() {
