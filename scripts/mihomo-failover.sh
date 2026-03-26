@@ -1,6 +1,6 @@
 #!/bin/sh
 # mihomo-failover.sh
-# 定时检查 Claude 当前策略链是否可用，不可用时切换当前命中的地区组节点
+# 定时检查 Claude 与节点选择当前策略链是否可用，不可用时切换当前命中的地区组节点
 # 用法: mihomo-failover.sh
 # 建议 cron 每 2 分钟跑一次
 
@@ -9,7 +9,9 @@ API_BASE="http://192.168.32.1:9999"
 SECRET=""
 PROXY_URL="http://127.0.0.1:7890"
 CLAUDE_URL="https://claude.ai/"
-ENTRY_GROUPS="🤖 AI 平台"
+GOOGLE_URL="https://www.google.com/"
+CLAUDE_ENTRY_GROUPS="🤖 AI 平台"
+GOOGLE_ENTRY_GROUPS="🚀 节点选择"
 CURL_CONNECT_TIMEOUT=5
 CURL_MAX_TIME=15
 SWITCH_WAIT=1
@@ -103,19 +105,21 @@ append_line() {
     fi
 }
 
-check_claude_connectivity() {
+check_url_connectivity() {
+    url="$1"
+
     http_code=$(
-        curl -sS -o /dev/null -L \
+        curl -sS -o /dev/null \
             --connect-timeout "$CURL_CONNECT_TIMEOUT" \
             --max-time "$CURL_MAX_TIME" \
             --proxy "$PROXY_URL" \
             -A "$CURL_USER_AGENT" \
             -w '%{http_code}' \
-            "$CLAUDE_URL" 2>/dev/null
+            "$url" 2>/dev/null
     ) || return 1
 
     case "$http_code" in
-        200|204|301|302|307|308)
+        200|204|301|302|307|308|403)
             return 0
             ;;
         *)
@@ -160,12 +164,13 @@ resolve_region_group_from_entry() {
 }
 
 resolve_active_region_groups() {
+    entry_groups="${1:-$CLAUDE_ENTRY_GROUPS}"
     active_groups=""
     old_ifs=$IFS
     IFS='
 '
 
-    for entry in $ENTRY_GROUPS; do
+    for entry in $entry_groups; do
         entry=$(trim_spaces "$entry")
         [ -n "$entry" ] || continue
 
@@ -187,6 +192,8 @@ format_groups_for_log() {
 
 check_group() {
     group="$1"
+    target_name="${2:-Claude}"
+    target_url="${3:-$CLAUDE_URL}"
 
     group_json=$(get_group "$group")
     if [ -z "$group_json" ]; then
@@ -200,12 +207,12 @@ check_group() {
         return 1
     fi
 
-    if check_claude_connectivity; then
-        log "[${group}] Claude 连通正常，保持当前节点 ${current}"
+    if check_url_connectivity "$target_url"; then
+        log "[${group}] ${target_name} 连通正常，保持当前节点 ${current}"
         return 0
     fi
 
-    log "[${group}] Claude 连通失败，开始切换当前节点 ${current}"
+    log "[${group}] ${target_name} 连通失败，开始切换当前节点 ${current}"
     all_nodes=$(parse_all_nodes "$group_json")
     original="$current"
     old_ifs=$IFS
@@ -219,9 +226,9 @@ check_group() {
         switch_node "$group" "$node"
         wait_after_switch
 
-        if check_claude_connectivity; then
+        if check_url_connectivity "$target_url"; then
             IFS=$old_ifs
-            log "[${group}] 已切换到 ${node}，Claude 连通恢复"
+            log "[${group}] 已切换到 ${node}，${target_name} 连通恢复"
             return 0
         fi
     done
@@ -229,39 +236,52 @@ check_group() {
     IFS=$old_ifs
     switch_node "$group" "$original"
     wait_after_switch
-    log "[${group}] 已尝试所有候选节点，Claude 仍不可达，恢复到 ${original}"
+    log "[${group}] 已尝试所有候选节点，${target_name} 仍不可达，恢复到 ${original}"
     return 1
 }
 
-main() {
-    active_groups=$(resolve_active_region_groups)
+maintain_entry_groups() {
+    target_name="$1"
+    entry_groups="$2"
+    target_url="$3"
+
+    active_groups=$(resolve_active_region_groups "$entry_groups")
     if [ -z "$active_groups" ]; then
-        log "未在当前 Claude 策略链中发现地区组，跳过"
+        log "未在当前 ${target_name} 策略链中发现地区组，跳过"
         return 0
     fi
 
-    log "当前 Claude 策略链命中的地区组: $(format_groups_for_log "$active_groups")"
+    log "当前 ${target_name} 策略链命中的地区组: $(format_groups_for_log "$active_groups")"
 
-    if check_claude_connectivity; then
-        log "当前 Claude 连通正常，无需切换"
+    if check_url_connectivity "$target_url"; then
+        log "当前 ${target_name} 连通正常，无需切换"
         return 0
     fi
 
-    log "当前 Claude 连通失败，开始维护命中的地区组"
+    log "当前 ${target_name} 连通失败，开始维护命中的地区组"
 
     old_ifs=$IFS
     IFS='
 '
     for group in $active_groups; do
-        check_group "$group" && {
+        check_group "$group" "$target_name" "$target_url" && {
             IFS=$old_ifs
             return 0
         }
     done
     IFS=$old_ifs
 
-    log "已尝试所有命中的地区组，Claude 仍不可达"
+    log "已尝试所有命中的地区组，${target_name} 仍不可达"
     return 1
+}
+
+main() {
+    status=0
+
+    maintain_entry_groups "Claude" "$CLAUDE_ENTRY_GROUPS" "$CLAUDE_URL" || status=1
+    maintain_entry_groups "Google" "$GOOGLE_ENTRY_GROUPS" "$GOOGLE_URL" || status=1
+
+    return "$status"
 }
 
 if [ "${MIHOMO_FAILOVER_SOURCE_ONLY:-0}" != "1" ]; then
