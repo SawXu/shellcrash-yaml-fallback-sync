@@ -17,6 +17,31 @@ def run_shell(script: str) -> subprocess.CompletedProcess[str]:
 
 
 class MihomoFailoverTests(unittest.TestCase):
+    def test_resolve_active_region_groups_uses_claude_entry_group_by_default(self) -> None:
+        result = run_shell(
+            textwrap.dedent(
+                """
+                MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                log() { :; }
+                get_group() {
+                    case "$1" in
+                        "🤖 AI 平台") printf '%s' '{"now":"🤖 AI 出口"}' ;;
+                        "🤖 AI 出口") printf '%s' '{"now":"🇺🇸 美国节点"}' ;;
+                        "🚀 节点选择") printf '%s' '{"now":"🇭🇰 香港节点"}' ;;
+                        "🇺🇸 美国节点") printf '%s' '{"now":"美国A","all":["美国A","美国B"]}' ;;
+                        "🇭🇰 香港节点") printf '%s' '{"now":"香港A","all":["香港A","香港B"]}' ;;
+                        *) printf '%s' '{}' ;;
+                    esac
+                }
+
+                resolve_active_region_groups
+                """
+            )
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines(), ["🇺🇸 美国节点"])
+
     def test_resolves_region_group_from_entry_chain(self) -> None:
         result = run_shell(
             textwrap.dedent(
