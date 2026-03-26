@@ -1,14 +1,20 @@
 #!/bin/sh
 # mihomo-failover.sh
-# 定时检查 select 组当前节点是否可用，挂了自动切到下一个可用节点
+# 定时检查 Claude 当前策略链是否可用，不可用时切换当前命中的地区组节点
 # 用法: mihomo-failover.sh
 # 建议 cron 每 2 分钟跑一次
 
 # ============ 配置 ============
 API_BASE="http://192.168.32.1:9999"
 SECRET=""
-TEST_URL="https://www.gstatic.com/generate_204"
-TIMEOUT=3000
+PROXY_URL="http://127.0.0.1:7890"
+CLAUDE_URL="https://claude.ai/"
+ENTRY_GROUPS="🤖 AI 平台
+🚀 节点选择"
+CURL_CONNECT_TIMEOUT=5
+CURL_MAX_TIME=15
+SWITCH_WAIT=1
+CURL_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 # ==================================
 
 LOG_TAG="mihomo-failover"
@@ -50,12 +56,6 @@ get_group() {
     api_get "${API_BASE}/proxies/$(urlencode "$1")"
 }
 
-# 测试节点延迟，返回延迟 ms 或空
-test_delay() {
-    _resp=$(api_get "${API_BASE}/proxies/$(urlencode "$1")/delay?timeout=${TIMEOUT}&url=${TEST_URL}")
-    echo "$_resp" | grep -o '"delay":[0-9]*' | grep -o '[0-9]*'
-}
-
 # 切换代理组到指定节点
 switch_node() {
     api_put "${API_BASE}/proxies/$(urlencode "$1")" "{\"name\":\"$2\"}" >/dev/null
@@ -70,68 +70,201 @@ parse_all_nodes() {
     echo "$1" | grep -o '"all":\[[^]]*\]' | sed 's/"all":\[//;s/\]$//' | tr ',' '\n' | sed 's/^"//;s/"$//' | sed 's/^ *//;s/ *$//'
 }
 
-# 检查单个代理组
+is_region_group() {
+    case "$1" in
+        "🇭🇰 香港节点"|"🇹🇼 台湾节点"|"🇯🇵 日本节点"|"🇸🇬 新加坡节点"|"🇺🇸 美国节点")
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+contains_line() {
+    text="$1"
+    needle="$2"
+
+    [ -n "$text" ] || return 1
+    printf '%s\n' "$text" | grep -Fx -- "$needle" >/dev/null 2>&1
+}
+
+trim_spaces() {
+    printf '%s' "$1" | sed 's/^ *//;s/ *$//'
+}
+
+append_line() {
+    text="$1"
+    line="$2"
+
+    if [ -n "$text" ]; then
+        printf '%s\n%s' "$text" "$line"
+    else
+        printf '%s' "$line"
+    fi
+}
+
+check_claude_connectivity() {
+    http_code=$(
+        curl -sS -o /dev/null -L \
+            --connect-timeout "$CURL_CONNECT_TIMEOUT" \
+            --max-time "$CURL_MAX_TIME" \
+            --proxy "$PROXY_URL" \
+            -A "$CURL_USER_AGENT" \
+            -w '%{http_code}' \
+            "$CLAUDE_URL" 2>/dev/null
+    ) || return 1
+
+    case "$http_code" in
+        200|204|301|302|307|308)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+wait_after_switch() {
+    [ "$SWITCH_WAIT" -gt 0 ] 2>/dev/null || return 0
+    sleep "$SWITCH_WAIT"
+}
+
+resolve_region_group_from_entry() {
+    entry="$1"
+    current="$entry"
+    visited=""
+
+    while [ -n "$current" ]; do
+        if contains_line "$visited" "$current"; then
+            log "[${entry}] 策略链出现循环：${current}"
+            return 1
+        fi
+
+        visited=$(append_line "$visited" "$current")
+
+        group_json=$(get_group "$current")
+        [ -n "$group_json" ] || return 1
+
+        selected=$(parse_now "$group_json")
+        [ -n "$selected" ] || return 1
+
+        if is_region_group "$selected"; then
+            printf '%s\n' "$selected"
+            return 0
+        fi
+
+        current="$selected"
+    done
+
+    return 1
+}
+
+resolve_active_region_groups() {
+    active_groups=""
+    old_ifs=$IFS
+    IFS='
+'
+
+    for entry in $ENTRY_GROUPS; do
+        entry=$(trim_spaces "$entry")
+        [ -n "$entry" ] || continue
+
+        group=$(resolve_region_group_from_entry "$entry") || continue
+        if contains_line "$active_groups" "$group"; then
+            continue
+        fi
+
+        active_groups=$(append_line "$active_groups" "$group")
+    done
+
+    IFS=$old_ifs
+    [ -n "$active_groups" ] && printf '%s\n' "$active_groups"
+}
+
+format_groups_for_log() {
+    printf '%s' "$1" | tr '\n' ',' | sed 's/,$//'
+}
+
 check_group() {
     group="$1"
 
     group_json=$(get_group "$group")
     if [ -z "$group_json" ]; then
         log "[${group}] API 请求失败，跳过"
-        return
+        return 1
     fi
 
     current=$(parse_now "$group_json")
     if [ -z "$current" ]; then
         log "[${group}] 无法获取当前节点，跳过"
-        return
+        return 1
     fi
 
-    # 测试当前节点
-    delay=$(test_delay "$current")
-    if [ -n "$delay" ]; then
-        log "[${group}] ${current} 正常 (${delay}ms)"
-        return
+    if check_claude_connectivity; then
+        log "[${group}] Claude 连通正常，保持当前节点 ${current}"
+        return 0
     fi
 
-    # 当前节点不可用，测试所有节点找延迟最低的
-    log "[${group}] ${current} 不可用，测试所有节点..."
-
+    log "[${group}] Claude 连通失败，开始切换当前节点 ${current}"
     all_nodes=$(parse_all_nodes "$group_json")
-    best_node=""
-    best_delay=999999
+    original="$current"
+    old_ifs=$IFS
+    IFS='
+'
 
-    # 写入临时文件收集结果（避免子 shell 变量丢失）
-    _tmp="/tmp/mihomo_failover_$$"
-    rm -f "$_tmp"
-
-    echo "$all_nodes" | while IFS= read -r node; do
+    for node in $all_nodes; do
         [ -z "$node" ] && continue
         [ "$node" = "$current" ] && continue
 
-        node_delay=$(test_delay "$node")
-        if [ -n "$node_delay" ]; then
-            echo "${node_delay} ${node}" >> "$_tmp"
+        switch_node "$group" "$node"
+        wait_after_switch
+
+        if check_claude_connectivity; then
+            IFS=$old_ifs
+            log "[${group}] 已切换到 ${node}，Claude 连通恢复"
+            return 0
         fi
     done
 
-    if [ -f "$_tmp" ] && [ -s "$_tmp" ]; then
-        # 按延迟排序取第一行（最低延迟）
-        best_line=$(sort -n "$_tmp" | head -1)
-        best_delay=$(echo "$best_line" | cut -d' ' -f1)
-        best_node=$(echo "$best_line" | cut -d' ' -f2-)
-        rm -f "$_tmp"
-
-        switch_node "$group" "$best_node"
-        log "[${group}] 已切换到 ${best_node} (${best_delay}ms)"
-    else
-        rm -f "$_tmp"
-        log "[${group}] 所有节点均不可用！"
-    fi
+    IFS=$old_ifs
+    switch_node "$group" "$original"
+    wait_after_switch
+    log "[${group}] 已尝试所有候选节点，Claude 仍不可达，恢复到 ${original}"
+    return 1
 }
 
-# ============ 主逻辑 ============
-check_group "🇭🇰 香港节点"
-check_group "🇹🇼 台湾节点"
-check_group "🇯🇵 日本节点"
-check_group "🇸🇬 新加坡节点"
-check_group "🇺🇸 美国节点"
+main() {
+    active_groups=$(resolve_active_region_groups)
+    if [ -z "$active_groups" ]; then
+        log "未在当前 Claude 策略链中发现地区组，跳过"
+        return 0
+    fi
+
+    log "当前 Claude 策略链命中的地区组: $(format_groups_for_log "$active_groups")"
+
+    if check_claude_connectivity; then
+        log "当前 Claude 连通正常，无需切换"
+        return 0
+    fi
+
+    log "当前 Claude 连通失败，开始维护命中的地区组"
+
+    old_ifs=$IFS
+    IFS='
+'
+    for group in $active_groups; do
+        check_group "$group" && {
+            IFS=$old_ifs
+            return 0
+        }
+    done
+    IFS=$old_ifs
+
+    log "已尝试所有命中的地区组，Claude 仍不可达"
+    return 1
+}
+
+if [ "${MIHOMO_FAILOVER_SOURCE_ONLY:-0}" != "1" ]; then
+    main "$@"
+fi
