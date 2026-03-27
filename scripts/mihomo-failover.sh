@@ -7,7 +7,7 @@
 # ============ 配置 ============
 API_BASE="http://192.168.32.1:9999"
 SECRET=""
-PROXY_URL="http://127.0.0.1:7890"
+PROXY_URL="http://192.168.32.1:7890"
 CLAUDE_URL="https://claude.ai/"
 GOOGLE_URL="https://www.google.com/"
 CLAUDE_ENTRY_GROUPS="🤖 AI 平台"
@@ -105,21 +105,75 @@ append_line() {
     fi
 }
 
+is_claude_url() {
+    case "$1" in
+        https://claude.ai/*|https://www.claude.ai/*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+is_cloudflare_challenge_body() {
+    case "$1" in
+        *"Just a moment"*|*"challenge-platform"*|*"cf_chl_opt"*|\
+        *"Enable JavaScript and cookies to continue"*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 check_url_connectivity() {
     url="$1"
+    tmpfile="/tmp/mihomo-failover-$$-$(date +%s).html"
 
-    http_code=$(
-        curl -sS -o /dev/null \
+    # 确保临时文件总是被清理
+    trap 'rm -f "$tmpfile"' EXIT RETURN
+
+    res=$(
+        curl -sSL -o "$tmpfile" \
             --connect-timeout "$CURL_CONNECT_TIMEOUT" \
             --max-time "$CURL_MAX_TIME" \
             --proxy "$PROXY_URL" \
             -A "$CURL_USER_AGENT" \
-            -w '%{http_code}' \
+            -w '%{http_code} %{url_effective}' \
             "$url" 2>/dev/null
     ) || return 1
 
+    http_code=$(echo "$res" | cut -d' ' -f1)
+    final_url=$(echo "$res" | cut -d' ' -f2)
+
+    # 检查最终 URL 是否包含区域限制关键字
+    case "$final_url" in
+        *unavailable*|*not-available*|*region-lock*)
+            return 1
+            ;;
+    esac
+
+    # 检查响应体内容（Cloudflare 挑战、区域限制等）
+    if [ -f "$tmpfile" ]; then
+        content=$(cat "$tmpfile")
+
+        case "$content" in
+            *"app-unavailable-in-region"*|*"not available in your region"*)
+                return 1
+                ;;
+        esac
+
+        if is_cloudflare_challenge_body "$content"; then
+            is_claude_url "$url" && is_claude_url "$final_url" && return 0
+            return 1
+        fi
+    fi
+
+    # 状态码判定：200/204 成功，403 若未触发内容检测则视为可用
     case "$http_code" in
-        200|204|301|302|307|308|403)
+        200|204|403)
             return 0
             ;;
         *)
