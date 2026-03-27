@@ -11,9 +11,10 @@ proxy-groups:
   - {name: 🎥 奈飞视频, type: select, proxies: [🚀 节点选择, 👑 高级节点, 🇭🇰 香港节点, 🇹🇼 台湾节点, 🇯🇵 日本节点, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 📉 省流节点, {providers_tags}]}
   - {name: 📹 油管视频, type: select, proxies: [🚀 节点选择, 👑 高级节点, 🇭🇰 香港节点, 🇹🇼 台湾节点, 🇯🇵 日本节点, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 📉 省流节点, {providers_tags}]}
   - {name: 🌍 国外媒体, type: select, proxies: [🚀 节点选择, 👑 高级节点, 🇭🇰 香港节点, 🇹🇼 台湾节点, 🇯🇵 日本节点, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 📉 省流节点, {providers_tags}]}
+  - {name: 📋 Trackerslist, type: select, proxies: [🎯 本地直连, 🚀 节点选择]}
   - {name: 🇨🇳 国内域名, type: select, proxies: [🎯 本地直连, 🚀 节点选择]}
   - {name: 🀄️ 国内 IP, type: select, proxies: [🎯 本地直连, 🚀 节点选择]}
-  - {name: 🌎 国外域名, type: select, proxies: [🚀 节点选择, 🇭🇰 香港节点, 🇹🇼 台湾节点, 🇯🇵 日本节点, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 👑 高级节点, 📉 省流节点, {providers_tags}]}
+  - {name: 🌎 国外域名, type: select, proxies: [🚀 节点选择, 🎯 本地直连]}
   - {name: 📲 电报消息, type: select, proxies: [🚀 节点选择, 🇭🇰 香港节点, 🇹🇼 台湾节点, 🇯🇵 日本节点, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 👑 高级节点, 📉 省流节点, {providers_tags}]}
   - {name: 🔒 私有网络, type: select, proxies: [🎯 本地直连], hidden: true}
   - {name: 🐟 漏网之鱼, type: select, proxies: [🚀 节点选择, 🇭🇰 香港节点, 🇹🇼 台湾节点, 🇯🇵 日本节点, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 👑 高级节点, 📉 省流节点, {providers_tags}, 🎯 本地直连]}
@@ -36,6 +37,14 @@ rule-providers:
     format: mrs
     path: ./ruleset/private.mrs
     url: "https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/private.mrs"
+    interval: 86400
+
+  trackerslist:
+    type: http
+    behavior: domain
+    format: mrs
+    path: ./ruleset/trackerslist.mrs
+    url: "https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/trackerslist.mrs"
     interval: 86400
 
   microsoft-cn:
@@ -176,6 +185,7 @@ rule-providers:
 
 rules:
   - RULE-SET,private,🔒 私有网络
+  - RULE-SET,trackerslist,📋 Trackerslist
   - RULE-SET,microsoft-cn,🪟 微软服务
   - RULE-SET,apple-cn,🍎 苹果服务
   - RULE-SET,google-cn,🇬 谷歌服务
