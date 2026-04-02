@@ -17,11 +17,96 @@ def run_shell(script: str) -> subprocess.CompletedProcess[str]:
 
 
 class MihomoFailoverTests(unittest.TestCase):
-    def test_check_url_connectivity_treats_cloudflare_challenge_as_reachable(self) -> None:
+    def test_check_url_connectivity_enables_debug_logging_by_default(self) -> None:
         result = run_shell(
             textwrap.dedent(
                 """
                 MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                log() { printf '%s\\n' "$1"; }
+                curl() {
+                    output_file=""
+                    while [ "$#" -gt 0 ]; do
+                        if [ "$1" = "-o" ]; then
+                            output_file="$2"
+                            shift 2
+                            continue
+                        fi
+                        shift
+                    done
+
+                    cat >"$output_file" <<'EOF'
+                <!DOCTYPE html>
+                <html>
+                    <body>ok</body>
+                </html>
+                EOF
+                    printf '200 https://claude.ai/login'
+                }
+
+                set +e
+                check_url_connectivity "https://claude.ai/"
+                status=$?
+                set -e
+                printf 'status:%s\\n' "$status"
+                """
+            )
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("[connectivity]", result.stdout)
+        self.assertIn("decision=http-200", result.stdout)
+        self.assertTrue(result.stdout.strip().endswith("status:0"))
+
+    def test_check_url_connectivity_emits_debug_log_for_challenge(self) -> None:
+        result = run_shell(
+            textwrap.dedent(
+                """
+                DEBUG_CONNECTIVITY=1 MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                log() { printf '%s\\n' "$1"; }
+                curl() {
+                    output_file=""
+                    while [ "$#" -gt 0 ]; do
+                        if [ "$1" = "-o" ]; then
+                            output_file="$2"
+                            shift 2
+                            continue
+                        fi
+                        shift
+                    done
+
+                    cat >"$output_file" <<'EOF'
+                <!DOCTYPE html>
+                <html>
+                    <head><title>Just a moment...</title></head>
+                    <body>
+                        <script>window._cf_chl_opt = {};</script>
+                    </body>
+                </html>
+                EOF
+                    printf '403 https://claude.ai/login'
+                }
+
+                set +e
+                check_url_connectivity "https://claude.ai/"
+                status=$?
+                set -e
+                printf 'status:%s\\n' "$status"
+                """
+            )
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("http_code=403", result.stdout)
+        self.assertIn("final_url=https://claude.ai/login", result.stdout)
+        self.assertIn("body_markers=cloudflare-challenge", result.stdout)
+        self.assertIn("decision=cloudflare-challenge-accepted", result.stdout)
+        self.assertTrue(result.stdout.strip().endswith("status:0"))
+
+    def test_check_url_connectivity_treats_cloudflare_challenge_as_reachable(self) -> None:
+        result = run_shell(
+            textwrap.dedent(
+                """
+                DEBUG_CONNECTIVITY=0 MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
                 curl() {
                     output_file=""
                     while [ "$#" -gt 0 ]; do
@@ -61,7 +146,7 @@ class MihomoFailoverTests(unittest.TestCase):
         result = run_shell(
             textwrap.dedent(
                 """
-                MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                DEBUG_CONNECTIVITY=0 MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
                 curl() {
                     # 模拟返回 403 且没有被弹走
                     printf '403 https://claude.ai/'
@@ -83,7 +168,7 @@ class MihomoFailoverTests(unittest.TestCase):
         result = run_shell(
             textwrap.dedent(
                 """
-                MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                DEBUG_CONNECTIVITY=0 MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
                 curl() {
                     # 模拟正常重定向到首页
                     printf '200 https://claude.ai/login'
@@ -105,7 +190,7 @@ class MihomoFailoverTests(unittest.TestCase):
         result = run_shell(
             textwrap.dedent(
                 """
-                MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                DEBUG_CONNECTIVITY=0 MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
                 curl() {
                     # 模拟重定向到不可用页面，即便状态码是 200 也应失败
                     printf '200 https://claude.ai/app-unavailable-in-region'
@@ -127,7 +212,7 @@ class MihomoFailoverTests(unittest.TestCase):
         result = run_shell(
             textwrap.dedent(
                 """
-                MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                DEBUG_CONNECTIVITY=0 MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
                 log() { :; }
                 SWITCH_WAIT=0
                 CURRENT_NODE="香港A"
@@ -171,7 +256,7 @@ class MihomoFailoverTests(unittest.TestCase):
         result = run_shell(
             textwrap.dedent(
                 """
-                MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
+                DEBUG_CONNECTIVITY=0 MIHOMO_FAILOVER_SOURCE_ONLY=1 . ./scripts/mihomo-failover.sh
                 log() { :; }
                 get_group() {
                     case "$1" in
