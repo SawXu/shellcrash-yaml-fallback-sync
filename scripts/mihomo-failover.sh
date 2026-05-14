@@ -1,5 +1,12 @@
 #!/bin/sh
 # mihomo-failover.sh
+#
+# [DEPRECATED] 自最新一次 sync_yaml 改动起，地区节点组保持上游 url-test 类型；
+# Mihomo 不接受对 url-test 组 PUT /proxies 切换 now，故本脚本的 switch_node
+# 调用对地区组无实际效果。AI 平台路径若已切到「👉 手动选择」并锁定固定节点，
+# 脚本会因追不到地区组而自动跳过，亦无作用。建议从 cron 中移除调用，文件保留
+# 仅作历史参考。
+#
 # 定时检查 Claude 与节点选择当前策略链是否可用，不可用时切换当前命中的地区组节点
 # 用法: mihomo-failover.sh
 # 建议 cron 每 2 分钟跑一次
