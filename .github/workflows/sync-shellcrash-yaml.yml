@@ -7,6 +7,12 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 18 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/sync-shellcrash-yaml.yml"
+      - "scripts/sync_yaml.py"
+      - "tests/test_sync_yaml.py"
+      - "generated/DustinWin_RS_Full_NoAds.yaml"
 
 jobs:
   sync:
@@ -22,7 +28,7 @@ jobs:
           python-version: "3.12"
 
       - name: Run unit tests
-        run: python3 -m unittest discover -s tests -v
+        run: python3 -m unittest tests.test_sync_yaml -v
 
       - name: Generate YAML
         run: python3 scripts/sync_yaml.py
@@ -31,6 +37,7 @@ jobs:
         run: python3 scripts/sync_yaml.py --check
 
       - name: Commit changes
+        if: github.event_name != 'pull_request'
         run: |
           if git diff --quiet -- generated/DustinWin_RS_Full_NoAds.yaml; then
             echo "No changes to commit"

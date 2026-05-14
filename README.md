@@ -1,8 +1,8 @@
 # shellcrash-yaml-fallback-sync
 
-定时拉取 ShellCrash 默认分支上的最新 YAML，并将 5 个地区节点组从 `url-test` 改写为 `select` 后提交回仓库。
+定时拉取 ShellCrash 默认分支上的最新 YAML，对 `.mrs` 规则源做地址改写、并在 `🤖 AI 平台` 分组中追加 `👉 手动选择` 引用后提交回仓库。
 
-> 仓库名沿用了早期命名，但当前同步脚本并不会把节点组改成 `fallback`。
+> 仓库名沿用了早期命名，但当前同步脚本不再把地区节点组改成 `select`/`fallback`，地区组保持上游的 `url-test` 自动探活模式。
 
 ## 上游来源
 
@@ -21,38 +21,23 @@
 ## 生成结果
 
 - 输出文件：`generated/DustinWin_RS_Full_NoAds.yaml`
-- 改写范围：`🇭🇰 香港节点`、`🇹🇼 台湾节点`、`🇯🇵 日本节点`、`🇸🇬 新加坡节点`、`🇺🇸 美国节点`
-- 改写规则：将上述节点组的 `type: url-test` 改为 `type: select`，并移除对应的 `tolerance`
-- 如需在 `select` 组基础上做自动故障切换，可配合 `scripts/mihomo-failover.sh`
+- 改写内容：
+  - `🤖 AI 平台` 分组的 `proxies` 列表在 `🚀 节点选择` 之后插入 `👉 手动选择` 引用，便于在 AI 平台分组中锁定固定节点
+  - 所有 `rule-providers` 里的 `.mrs` 下载地址改写为 DustinWin 官方源
+- 不再改写：地区节点组（`🇭🇰/🇹🇼/🇯🇵/🇸🇬/🇺🇸`）保持上游 `type: url-test` 与 `tolerance`，使用 mihomo 自带的延迟探活自动选最快节点
+- 前置依赖：上游必须保留 `👉 手动选择` 与 `🤖 AI 平台` 两个组的定义，否则同步会失败退出
 
 ## 本地运行
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m unittest tests.test_sync_yaml -v
 python3 scripts/sync_yaml.py
 python3 scripts/sync_yaml.py --check
 ```
 
-## 故障切换脚本
+## 故障切换脚本（已弃用）
 
-- 脚本：`scripts/mihomo-failover.sh`
-- 作用：分别追踪 Claude 和 `🚀 节点选择` 的入口策略组，递归解析当前实际命中的地区组；只有当当前链路真实无法访问目标站点时，才在命中的地区组内依次切换候选节点
-- 依赖：可访问 Mihomo Controller API，且系统可用 `curl`
-- 先修改脚本顶部配置：`API_BASE`、`SECRET`、`PROXY_URL`、`CLAUDE_URL`、`GOOGLE_URL`、`CLAUDE_ENTRY_GROUPS`、`GOOGLE_ENTRY_GROUPS`、`CURL_CONNECT_TIMEOUT`、`CURL_MAX_TIME`、`SWITCH_WAIT`
-- 默认会检查两条链路：
-  - `🤖 AI 平台 -> claude.ai`
-  - `🚀 节点选择 -> google.com`
-- 连通性判断不再依赖 `gstatic` 或 Mihomo 的 `delay` 探测，而是通过本机代理直接请求真实目标站点
-
-```bash
-sh scripts/mihomo-failover.sh
-```
-
-建议配合 `cron` 每 2 分钟执行一次：
-
-```cron
-*/2 * * * * /bin/sh /path/to/shellcrash-yaml-fallback-sync/scripts/mihomo-failover.sh >> /tmp/mihomo-failover.log 2>&1
-```
+> `scripts/mihomo-failover.sh` 已标记为 **DEPRECATED**：地区节点组恢复 `url-test` 类型后，Mihomo 不接受对 `url-test` 组 `PUT /proxies` 切换 `now`，脚本里 `switch_node` 调用对地区组无实际效果；AI 平台路径若已切到 `👉 手动选择` 并锁定固定节点，脚本因追不到地区组而自动跳过。脚本与 `tests/test_mihomo_failover.py` 仅作历史参考保留，CI 不再执行 failover 相关测试，建议从 cron 中移除调用。
 
 ## 自动化
 

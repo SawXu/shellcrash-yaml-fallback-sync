@@ -20,12 +20,10 @@ OFFICIAL_MRS_BASE_URL = (
     "https://github.com/DustinWin/ruleset_geodata/releases/download/"
     "mihomo-ruleset"
 )
-TARGET_NAMES = (
-    "🇭🇰 香港节点",
-    "🇹🇼 台湾节点",
-    "🇯🇵 日本节点",
-    "🇸🇬 新加坡节点",
-    "🇺🇸 美国节点",
+AI_PLATFORM_GROUP_NAME = "🤖 AI 平台"
+MANUAL_SELECT_GROUP_NAME = "👉 手动选择"
+AI_PLATFORM_PROXIES_PREFIX = (
+    f"name: {AI_PLATFORM_GROUP_NAME}, type: select, proxies: [🚀 节点选择,"
 )
 MRS_URL_PATTERN = re.compile(
     r'https://[^"]*/DustinWin/ruleset_geodata@[^"/]+/(?P<filename>[^"/]+\.mrs)'
@@ -88,27 +86,6 @@ def download_upstream() -> str:
     return fetch_text(build_upstream_url(branch))
 
 
-def rewrite_line(line: str) -> str:
-    line = rewrite_mrs_url(line)
-
-    for name in TARGET_NAMES:
-        marker = f"name: {name}, type: url-test"
-        if marker not in line:
-            continue
-
-        prefix, filter_part = line.split(', filter: "', 1)
-        filter_value, suffix = filter_part.split('"}', 1)
-        rewritten_prefix = prefix.replace("type: url-test, ", "type: select, ")
-        rewritten_prefix = rewritten_prefix.replace("tolerance: 50, ", "")
-        rewritten_prefix = rewritten_prefix.replace("tolerance: 100, ", "")
-        return (
-            f'{rewritten_prefix}, filter: "{filter_value}"'
-            f"}}{suffix}"
-        )
-
-    return line
-
-
 def rewrite_mrs_url(line: str) -> str:
     def replace(match: re.Match[str]) -> str:
         filename = match.group("filename")
@@ -117,22 +94,36 @@ def rewrite_mrs_url(line: str) -> str:
     return MRS_URL_PATTERN.sub(replace, line)
 
 
+def inject_manual_select_into_ai_platform(line: str) -> str:
+    if AI_PLATFORM_PROXIES_PREFIX not in line:
+        return line
+    if MANUAL_SELECT_GROUP_NAME in line:
+        return line
+    return line.replace(
+        f"{AI_PLATFORM_PROXIES_PREFIX} ",
+        f"{AI_PLATFORM_PROXIES_PREFIX} {MANUAL_SELECT_GROUP_NAME}, ",
+        1,
+    )
+
+
+def rewrite_line(line: str) -> str:
+    return inject_manual_select_into_ai_platform(rewrite_mrs_url(line))
+
+
 def transform_content(content: str) -> str:
-    seen = set()
-    lines = []
+    rewritten = "\n".join(rewrite_line(line) for line in content.splitlines()) + "\n"
 
-    for line in content.splitlines():
-        rewritten = rewrite_line(line)
-        for name in TARGET_NAMES:
-            if f"name: {name}, type: select" in rewritten:
-                seen.add(name)
-        lines.append(rewritten)
+    if f"name: {MANUAL_SELECT_GROUP_NAME}, type: select" not in rewritten:
+        raise ValueError(
+            f"Upstream is missing the {MANUAL_SELECT_GROUP_NAME} group definition"
+        )
 
-    missing = sorted(set(TARGET_NAMES) - seen)
-    if missing:
-        raise ValueError(f"Missing target groups: {', '.join(missing)}")
+    if f"{AI_PLATFORM_PROXIES_PREFIX} {MANUAL_SELECT_GROUP_NAME}," not in rewritten:
+        raise ValueError(
+            f"Failed to inject {MANUAL_SELECT_GROUP_NAME} into {AI_PLATFORM_GROUP_NAME} proxies"
+        )
 
-    return "\n".join(lines) + "\n"
+    return rewritten
 
 
 def check_output(content: str, output_path: Path = OUTPUT_PATH) -> bool:
