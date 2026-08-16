@@ -25,6 +25,11 @@ MANUAL_SELECT_GROUP_NAME = "👉 手动选择"
 AI_PLATFORM_PROXIES_PREFIX = (
     f"name: {AI_PLATFORM_GROUP_NAME}, type: select, proxies: [🚀 节点选择,"
 )
+GAMING_PLATFORM_GROUP_NAME = "🕹️ 游戏平台"
+DIRECT_GROUP_NAME = "🎯 本地直连"
+GAMING_PLATFORM_PROXIES_PREFIX = (
+    f"name: {GAMING_PLATFORM_GROUP_NAME}, type: select, proxies: ["
+)
 MRS_URL_PATTERN = re.compile(
     r'https://[^"]*/DustinWin/ruleset_geodata@[^"/]+/(?P<filename>[^"/]+\.mrs)'
 )
@@ -106,8 +111,21 @@ def inject_manual_select_into_ai_platform(line: str) -> str:
     )
 
 
+def inject_direct_into_gaming_platform(line: str) -> str:
+    if GAMING_PLATFORM_PROXIES_PREFIX not in line:
+        return line
+    if DIRECT_GROUP_NAME in line:
+        return line
+    closing_index = line.rfind("]")
+    if closing_index == -1:
+        return line
+    return f"{line[:closing_index]}, {DIRECT_GROUP_NAME}{line[closing_index:]}"
+
+
 def rewrite_line(line: str) -> str:
-    return inject_manual_select_into_ai_platform(rewrite_mrs_url(line))
+    return inject_direct_into_gaming_platform(
+        inject_manual_select_into_ai_platform(rewrite_mrs_url(line))
+    )
 
 
 def transform_content(content: str) -> str:
@@ -121,6 +139,27 @@ def transform_content(content: str) -> str:
     if f"{AI_PLATFORM_PROXIES_PREFIX} {MANUAL_SELECT_GROUP_NAME}," not in rewritten:
         raise ValueError(
             f"Failed to inject {MANUAL_SELECT_GROUP_NAME} into {AI_PLATFORM_GROUP_NAME} proxies"
+        )
+
+    if f"name: {DIRECT_GROUP_NAME}, type: select" not in rewritten:
+        raise ValueError(
+            f"Upstream is missing the {DIRECT_GROUP_NAME} group definition"
+        )
+
+    if GAMING_PLATFORM_PROXIES_PREFIX not in rewritten:
+        raise ValueError(
+            f"Upstream is missing the {GAMING_PLATFORM_GROUP_NAME} group definition"
+        )
+
+    gaming_platform_line = next(
+        line
+        for line in rewritten.splitlines()
+        if GAMING_PLATFORM_PROXIES_PREFIX in line
+    )
+    if DIRECT_GROUP_NAME not in gaming_platform_line:
+        raise ValueError(
+            f"Failed to inject {DIRECT_GROUP_NAME} into "
+            f"{GAMING_PLATFORM_GROUP_NAME} proxies"
         )
 
     return rewritten
