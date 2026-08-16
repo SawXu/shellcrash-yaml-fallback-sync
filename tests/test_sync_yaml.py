@@ -3,6 +3,8 @@ import unittest
 
 from scripts.sync_yaml import (
     AI_PLATFORM_GROUP_NAME,
+    DIRECT_GROUP_NAME,
+    GAMING_PLATFORM_GROUP_NAME,
     MANUAL_SELECT_GROUP_NAME,
     build_upstream_url,
     parse_default_branch_from_ls_remote,
@@ -24,6 +26,8 @@ SOURCE = """#DustinWin-ruleset全分组规则
 proxy-groups:
   - {name: 🚀 节点选择, type: select, proxies: [♻️ 自动选择, 👉 手动选择, 🇭🇰 香港节点, 🇺🇸 美国节点]}
   - {name: 🤖 AI 平台, type: select, proxies: [🚀 节点选择, 👑 高级节点, 🇭🇰 香港节点, 🇺🇸 美国节点]}
+  - {name: 🕹️ 游戏平台, type: select, proxies: [🚀 节点选择, 👑 高级节点, 🇭🇰 香港节点, 🇺🇸 美国节点, {providers_tags}]}
+  - {name: 🎯 本地直连, type: select, proxies: [DIRECT], hidden: true}
   - {name: 👑 高级节点, type: url-test, tolerance: 50, include-all: true, filter: "(?i)(专线|专用)"}
   - {name: 📉 省流节点, type: url-test, tolerance: 100, include-all: true, filter: "(0\\\\.[1-5]|低倍率)"}
   - {name: ♻️ 自动选择, type: url-test, tolerance: 100, include-all: true}
@@ -79,6 +83,47 @@ class TransformContentTests(unittest.TestCase):
             line for line in result.splitlines() if AI_PLATFORM_GROUP_NAME in line
         )
         self.assertEqual(ai_platform_line.count(MANUAL_SELECT_GROUP_NAME), 1)
+
+    def test_injects_direct_into_gaming_platform_proxies_tail(self) -> None:
+        result = transform_content(SOURCE)
+
+        self.assertIn(
+            f"name: {GAMING_PLATFORM_GROUP_NAME}, type: select, "
+            f"proxies: [🚀 节点选择, 👑 高级节点, 🇭🇰 香港节点, 🇺🇸 美国节点, "
+            f"{{providers_tags}}, {DIRECT_GROUP_NAME}]",
+            result,
+        )
+
+    def test_does_not_duplicate_direct_when_already_present(self) -> None:
+        already_injected = SOURCE.replace(
+            "proxies: [🚀 节点选择, 👑 高级节点, 🇭🇰 香港节点, 🇺🇸 美国节点, {providers_tags}]",
+            "proxies: [🚀 节点选择, 👑 高级节点, 🇭🇰 香港节点, 🇺🇸 美国节点, {providers_tags}, 🎯 本地直连]",
+        )
+
+        result = transform_content(already_injected)
+
+        gaming_platform_line = next(
+            line for line in result.splitlines() if GAMING_PLATFORM_GROUP_NAME in line
+        )
+        self.assertEqual(gaming_platform_line.count(DIRECT_GROUP_NAME), 1)
+
+    def test_raises_when_direct_group_definition_is_missing(self) -> None:
+        without_direct = SOURCE.replace(
+            "  - {name: 🎯 本地直连, type: select, proxies: [DIRECT], hidden: true}\n",
+            "",
+        )
+
+        with self.assertRaisesRegex(ValueError, "本地直连"):
+            transform_content(without_direct)
+
+    def test_raises_when_gaming_platform_group_is_missing(self) -> None:
+        without_gaming = SOURCE.replace(
+            "  - {name: 🕹️ 游戏平台, type: select, proxies: [🚀 节点选择, 👑 高级节点, 🇭🇰 香港节点, 🇺🇸 美国节点, {providers_tags}]}\n",
+            "",
+        )
+
+        with self.assertRaisesRegex(ValueError, "游戏平台"):
+            transform_content(without_gaming)
 
     def test_rewrites_existing_mrs_urls_to_dustinwin_official_release(self) -> None:
         result = transform_content(SOURCE)
